@@ -9,12 +9,12 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  // Разрешаем CORS
+  // Разрешаем CORS (чтобы твой сайт на GitHub Pages мог обращаться)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Обработка preflight-запроса (OPTIONS)
+  // Обработка preflight-запроса (браузер иногда шлёт OPTIONS)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -30,6 +30,10 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Form parsing error' });
     }
 
+    // Логируем, чтобы увидеть структуру files
+    console.log('Fields:', fields);
+    console.log('Files:', files);
+
     const subject = Array.isArray(fields.subject) ? fields.subject[0] : fields.subject;
     const displayName = Array.isArray(fields.displayName) ? fields.displayName[0] : fields.displayName;
     const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
@@ -39,7 +43,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
-    // Проверяем переменные окружения
+    // Проверяем, есть ли путь к файлу (может называться filepath или path)
+    const filePath = file.filepath || file.path;
+    if (!filePath) {
+      console.error('file.filepath is undefined. File object:', file);
+      return res.status(500).json({ error: 'File path is missing' });
+    }
+
     const owner = process.env.REPO_OWNER;
     const repo = process.env.REPO_NAME;
     const token = process.env.GITHUB_TOKEN;
@@ -50,9 +60,8 @@ export default async function handler(req, res) {
     }
 
     try {
-      // Читаем файл
-      const fileBuffer = fs.readFileSync(file.filepath);
-      const fileName = file.originalFilename;
+      const fileBuffer = fs.readFileSync(filePath);
+      const fileName = file.originalFilename || file.name; // может быть name вместо originalFilename
       const branch = 'main';
       const path = `${subject}/${Date.now()}_${fileName}`;
       const base64Content = fileBuffer.toString('base64');
@@ -80,7 +89,7 @@ export default async function handler(req, res) {
       const fileUrl = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${path}`;
 
       // Удаляем временный файл
-      fs.unlinkSync(file.filepath);
+      fs.unlinkSync(filePath);
 
       return res.status(200).json({
         fileUrl,
