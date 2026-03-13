@@ -34,25 +34,28 @@ export default async function handler(req, res) {
     const subject = Array.isArray(fields.subject) ? fields.subject[0] : fields.subject;
     const displayName = Array.isArray(fields.displayName) ? fields.displayName[0] : fields.displayName;
     const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
-    const file = files.file;
+    const fileField = files.file;
 
-    if (!subject || !displayName || !type || !file) {
+    if (!subject || !displayName || !type || !fileField) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
-    // Определяем путь к файлу (разные версии formidable используют разные ключи)
-    let filePath = null;
-    if (file.filepath) filePath = file.filepath;
-    else if (file.path) filePath = file.path;
-    else if (file._writeStream && file._writeStream.path) filePath = file._writeStream.path;
-    else if (Array.isArray(file) && file[0]) {
-      // Если файл пришёл как массив
-      if (file[0].filepath) filePath = file[0].filepath;
-      else if (file[0].path) filePath = file[0].path;
+    // Извлекаем файловый объект (может быть массивом)
+    let fileObj;
+    if (Array.isArray(fileField)) {
+      fileObj = fileField[0];
+    } else {
+      fileObj = fileField;
     }
 
+    if (!fileObj) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Получаем путь к файлу
+    const filePath = fileObj.filepath;
     if (!filePath) {
-      console.error('Could not determine file path. File object:', file);
+      console.error('filepath missing in fileObj:', fileObj);
       return res.status(500).json({ error: 'File path is missing' });
     }
 
@@ -67,7 +70,7 @@ export default async function handler(req, res) {
 
     try {
       const fileBuffer = fs.readFileSync(filePath);
-      const fileName = file.originalFilename || file.name || 'file';
+      const fileName = fileObj.originalFilename || fileObj.newFilename || 'file';
       const branch = 'main';
       const path = `${subject}/${Date.now()}_${fileName}`;
       const base64Content = fileBuffer.toString('base64');
