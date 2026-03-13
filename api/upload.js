@@ -9,12 +9,10 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  // Разрешаем CORS (чтобы твой сайт на GitHub Pages мог обращаться)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Обработка preflight-запроса (браузер иногда шлёт OPTIONS)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -30,9 +28,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Form parsing error' });
     }
 
-    // Логируем, чтобы увидеть структуру files
-    console.log('Fields:', fields);
-    console.log('Files:', files);
+    console.log('Fields:', JSON.stringify(fields, null, 2));
+    console.log('Files:', JSON.stringify(files, null, 2));
 
     const subject = Array.isArray(fields.subject) ? fields.subject[0] : fields.subject;
     const displayName = Array.isArray(fields.displayName) ? fields.displayName[0] : fields.displayName;
@@ -43,10 +40,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
-    // Проверяем, есть ли путь к файлу (может называться filepath или path)
-    const filePath = file.filepath || file.path;
+    // Определяем путь к файлу (разные версии formidable используют разные ключи)
+    let filePath = null;
+    if (file.filepath) filePath = file.filepath;
+    else if (file.path) filePath = file.path;
+    else if (file._writeStream && file._writeStream.path) filePath = file._writeStream.path;
+    else if (Array.isArray(file) && file[0]) {
+      // Если файл пришёл как массив
+      if (file[0].filepath) filePath = file[0].filepath;
+      else if (file[0].path) filePath = file[0].path;
+    }
+
     if (!filePath) {
-      console.error('file.filepath is undefined. File object:', file);
+      console.error('Could not determine file path. File object:', file);
       return res.status(500).json({ error: 'File path is missing' });
     }
 
@@ -61,7 +67,7 @@ export default async function handler(req, res) {
 
     try {
       const fileBuffer = fs.readFileSync(filePath);
-      const fileName = file.originalFilename || file.name; // может быть name вместо originalFilename
+      const fileName = file.originalFilename || file.name || 'file';
       const branch = 'main';
       const path = `${subject}/${Date.now()}_${fileName}`;
       const base64Content = fileBuffer.toString('base64');
