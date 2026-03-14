@@ -95,7 +95,7 @@ export default async function handler(req, res) {
         return res.status(response.status).json({ error: data.message });
       }
 
-      const fileUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+      const fileUrl = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${path}`;
 
       // Удаляем временный файл
       fs.unlinkSync(filePath);
